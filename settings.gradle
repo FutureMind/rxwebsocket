@@ -1,0 +1,3 @@
+rootProject.name='RxWebSocket'
+include ':sample'
+include ':rxwebsocket'
