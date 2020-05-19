@@ -38,7 +38,6 @@ class RxSocketListener(private val stateEmitter: FlowableEmitter<SocketState>) :
     private val textMsgProcessor = PublishProcessor.create<String>()
     private val byteMsgProcessor = PublishProcessor.create<ByteString>()
 
-
     /**
      * Additional state. According to the [WebSocket] docs, messages can be enqueued even before the
      * socket is open, hence we let users do it upon socket creation.

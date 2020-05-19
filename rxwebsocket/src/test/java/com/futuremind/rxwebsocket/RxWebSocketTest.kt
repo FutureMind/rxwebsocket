@@ -1,8 +1,11 @@
 package com.futuremind.rxwebsocket
 
 import io.mockk.*
+import io.reactivex.Completable
 import io.reactivex.Flowable
 import okhttp3.*
+import okio.ByteString
+import okio.ByteString.Companion.encodeUtf8
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
@@ -28,6 +31,8 @@ class RxWebSocketTest {
         }
 
         justRun { mockWebSocket.cancel() }
+        every { mockWebSocket.send(any<String>()) } returns true
+        every { mockWebSocket.send(any<ByteString>()) } returns true
 
         val closeCodeCaptor = slot<Int>()
         val closeMsgCaptor = slot<String>()
@@ -44,9 +49,15 @@ class RxWebSocketTest {
     @Test
     fun `given subscribed to rxws, immediately returns Connecting Status`() {
         rxSocket.connect()
-            .mockSuccessfulConnection()
             .test()
             .assertValueAt(0) { it is SocketState.Connecting }
+    }
+
+    @Test
+    fun `given underlying socket connects, returns Connected status`() {
+        rxSocket.connect()
+            .mockSuccessfulConnection()
+            .test()
             .assertValueAt(1) { it is SocketState.Connected }
     }
 
@@ -103,6 +114,116 @@ class RxWebSocketTest {
                         && exception.originalException == connectionException
                         && exception.response == connectionResponse
             }
+    }
+
+    @Test
+    fun `given text messages sent to rxws, they are sent through the underlying socket`() {
+        rxSocket.connect()
+            .switchMapCompletable { state ->
+                if(state is SocketState.SendCapable){
+                    state.send("abc")
+                    state.send("def")
+                }
+                Completable.complete()
+            }
+            .subscribe()
+
+        verify { mockWebSocket.send("abc") }
+        verify { mockWebSocket.send("def") }
+    }
+
+    @Test
+    fun `given byte string messages sent to rxws, they are sent through the underlying socket`() {
+        rxSocket.connect()
+            .switchMapCompletable { state ->
+                if(state is SocketState.SendCapable){
+                    state.send("abc".encodeUtf8())
+                    state.send("def".encodeUtf8())
+                }
+                Completable.complete()
+            }
+            .subscribe()
+
+        verify { mockWebSocket.send("abc".encodeUtf8()) }
+        verify { mockWebSocket.send("def".encodeUtf8()) }
+    }
+
+    @Test
+    fun `given text messages received by underlying socket, they are pushed through rxws`() {
+
+        val testSubscriber = rxSocket.connect()
+            .mockSuccessfulConnection()
+            .switchMap { state ->
+                when(state){
+                    is SocketState.Connected -> state.messageFlowable()
+                    else -> Flowable.never()
+                }
+            }
+            .test()
+
+        mockWebSocketListener.onMessage(mockWebSocket, "abc")
+        mockWebSocketListener.onMessage(mockWebSocket, "def")
+
+        testSubscriber.assertValues("abc", "def")
+
+    }
+
+    @Test
+    fun `given bytestring messages received by underlying socket, they are pushed through rxws`() {
+
+        val testSubscriber = rxSocket.connect()
+            .mockSuccessfulConnection()
+            .switchMap { state ->
+                when(state){
+                    is SocketState.Connected -> state.byteMessageFlowable()
+                    else -> Flowable.never()
+                }
+            }
+            .test()
+
+        mockWebSocketListener.onMessage(mockWebSocket, "abc".encodeUtf8())
+        mockWebSocketListener.onMessage(mockWebSocket, "def".encodeUtf8())
+
+        testSubscriber.assertValues("abc".encodeUtf8(), "def".encodeUtf8())
+
+    }
+
+    @Test
+    fun `given bytestring message received by underlying socket, regular text message is not pushed through rxws`() {
+
+        val testSubscriber = rxSocket.connect()
+            .mockSuccessfulConnection()
+            .switchMap { state ->
+                when(state){
+                    is SocketState.Connected -> state.messageFlowable()
+                    else -> Flowable.never()
+                }
+            }
+            .test()
+
+        mockWebSocketListener.onMessage(mockWebSocket, "abc".encodeUtf8())
+
+        testSubscriber.assertNever("abc")
+
+    }
+
+    @Test
+    fun `given regular text message received by underlying socket, bytestring message is not pushed through rxws`() {
+
+        val testSubscriber = rxSocket.connect()
+            .mockSuccessfulConnection()
+            .switchMap { state ->
+                when(state){
+                    is SocketState.Connected -> state.byteMessageFlowable()
+                    else -> Flowable.never()
+                }
+            }
+            .test()
+
+        mockWebSocketListener.onMessage(mockWebSocket, "abc")
+
+        testSubscriber.assertNever("abc".encodeUtf8())
+
     }
 
     private fun prepareOkHttpResponse(code: Int) = Response.Builder()
