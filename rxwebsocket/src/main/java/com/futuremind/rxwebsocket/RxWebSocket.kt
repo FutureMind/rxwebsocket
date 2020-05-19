@@ -18,7 +18,7 @@ class RxWebSocket(
     private var socket: WebSocket? = null
 
     fun connect(): Flowable<SocketState> = Single
-        .fromCallable { openSocketAndListen() }
+        .fromCallable(::openSocketAndListen)
         .flatMapPublisher { (socket, listener) ->
             Flowable.create<SocketState>(
                 {
@@ -65,16 +65,6 @@ class RxSocketListener : WebSocketListener() {
         stateEmitter?.onNext(connectedState)
     }
 
-    override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-        super.onFailure(webSocket, t, response)
-        stateEmitter?.tryOnError(SocketConnectionException(t, response))
-    }
-
-    override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-        super.onClosing(webSocket, code, reason)
-        stateEmitter?.onNext(SocketState.Disconnecting)
-    }
-
     override fun onMessage(webSocket: WebSocket, text: String) {
         super.onMessage(webSocket, text)
         textMsgProcessor.offer(text)
@@ -83,6 +73,16 @@ class RxSocketListener : WebSocketListener() {
     override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
         super.onMessage(webSocket, bytes)
         byteMsgProcessor.offer(bytes)
+    }
+
+    override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+        super.onFailure(webSocket, t, response)
+        stateEmitter?.tryOnError(SocketConnectionException(t, response))
+    }
+
+    override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+        super.onClosing(webSocket, code, reason)
+        stateEmitter?.onNext(SocketState.Disconnecting)
     }
 
     override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
