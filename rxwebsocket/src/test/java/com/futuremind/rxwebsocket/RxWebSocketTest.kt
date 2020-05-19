@@ -1,6 +1,7 @@
 package com.futuremind.rxwebsocket
 
 import io.mockk.*
+import io.reactivex.Flowable
 import okhttp3.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -11,7 +12,7 @@ class RxWebSocketTest {
     private var okHttpClient: OkHttpClient = mockk()
     private var request = Request.Builder().url("https://what.ever").build()
 
-    private val mockWebSocket : WebSocket = mockk()
+    private val mockWebSocket: WebSocket = mockk()
     private lateinit var mockWebSocketListener: WebSocketListener
 
     private lateinit var rxSocket: RxWebSocket
@@ -23,10 +24,6 @@ class RxWebSocketTest {
         val socketListenerCaptor = slot<WebSocketListener>()
         every { okHttpClient.newWebSocket(request, capture(socketListenerCaptor)) } answers {
             mockWebSocketListener = socketListenerCaptor.captured
-            mockWebSocketListener.onOpen(mockWebSocket, prepareOkHttpResponse(200))
-            every { mockWebSocketListener.onOpen(mockWebSocket, prepareOkHttpResponse(200)) } answers {
-                mockWebSocketListener.onFailure(mockWebSocket, Exception(), null)
-            }
             mockWebSocket
         }
 
@@ -47,8 +44,10 @@ class RxWebSocketTest {
     @Test
     fun `given subscribed to rxws, immediately returns Connecting Status`() {
         rxSocket.connect()
+            .mockSuccessfulConnection()
             .test()
-            .assertValue { it is SocketState.Connecting }
+            .assertValueAt(0) { it is SocketState.Connecting }
+            .assertValueAt(1) { it is SocketState.Connected }
     }
 
     @Test
@@ -89,31 +88,21 @@ class RxWebSocketTest {
     @Test
     fun `rxsw can be connected to again after being unsubscribed`() {
         rxSocket.connect().subscribe().dispose()
-        rxSocket.connect().test().assertValue{ it is SocketState.Connecting }
+        rxSocket.connect().test().assertValueAt(0) { it is SocketState.Connecting }
     }
 
     @Test
     fun `given connection fails, observable notifies error with SocketConnectionException`() {
         val connectionException = Exception()
         val connectionResponse = prepareOkHttpResponse(500)
-        makeMockWebSocketFail(connectionException, connectionResponse)
-        rxSocket.connect().test().assertError { exception ->
-            exception is RxSocketListener.SocketConnectionException
-                    && exception.originalException == connectionException
-                    && exception.response == connectionResponse
-        }
-    }
-
-    private fun makeMockWebSocketFail(exception: Throwable, message: Response?) {
-//        val socketListenerCaptor = slot<WebSocketListener>()
-//        every { okHttpClient.newWebSocket(request, capture(socketListenerCaptor)) } answers {
-//            mockWebSocketListener = socketListenerCaptor.captured
-//            mockWebSocketListener.onFailure(mockWebSocket, exception, message)
-//            mockWebSocket
-//        }
-//        every { mockWebSocketListener.onOpen(mockWebSocket, prepareOkHttpResponse(200)) } answers {
-//            mockWebSocketListener.onFailure(mockWebSocket, exception, message)
-//        }
+        rxSocket.connect()
+            .mockFailedConnection(connectionException, connectionResponse)
+            .test()
+            .assertError { exception ->
+                exception is RxSocketListener.SocketConnectionException
+                        && exception.originalException == connectionException
+                        && exception.response == connectionResponse
+            }
     }
 
     private fun prepareOkHttpResponse(code: Int) = Response.Builder()
@@ -122,5 +111,20 @@ class RxWebSocketTest {
         .code(code)
         .message("")
         .build()
+
+    private fun <T> Flowable<T>.mockSuccessfulConnection(): Flowable<T> = this.doOnNext { state ->
+        if (state is SocketState.Connecting) {
+            mockWebSocketListener.onOpen(mockWebSocket, prepareOkHttpResponse(200))
+        }
+    }
+
+    private fun <T> Flowable<T>.mockFailedConnection(
+        exception: Throwable,
+        message: Response?
+    ): Flowable<T> = this.doOnNext { state ->
+        if (state is SocketState.Connecting) {
+            mockWebSocketListener.onFailure(mockWebSocket, exception, message)
+        }
+    }
 
 }

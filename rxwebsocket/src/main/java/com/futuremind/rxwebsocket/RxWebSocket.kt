@@ -1,9 +1,8 @@
 package com.futuremind.rxwebsocket
 
-import io.reactivex.BackpressureStrategy
+import io.reactivex.BackpressureStrategy.LATEST
 import io.reactivex.Flowable
 import io.reactivex.FlowableEmitter
-import io.reactivex.Single
 import io.reactivex.processors.PublishProcessor
 import okhttp3.*
 import okio.ByteString
@@ -17,35 +16,24 @@ class RxWebSocket(
 
     private var socket: WebSocket? = null
 
-    fun connect(): Flowable<SocketState> = Single
-        .fromCallable(::openSocketAndListen)
-        .flatMapPublisher { (socket, listener) ->
-            Flowable.create<SocketState>(
-                {
-                    listener.stateEmitter = it
-                    listener.onCreate(socket)
-                },
-                BackpressureStrategy.LATEST
-            )
-        }
+    fun connect(): Flowable<SocketState> = Flowable
+        .create(::openSocketAndListen, LATEST)
         .doFinally { socket?.cancel(); socket = null }
 
     fun disconnect(code: Int, message: String) {
         socket?.close(code, message)
     }
 
-    private fun openSocketAndListen(): Pair<WebSocket, RxSocketListener> {
-        val listener = RxSocketListener()
+    private fun openSocketAndListen(emitter: FlowableEmitter<SocketState>) {
+        val listener = RxSocketListener(emitter)
         val socket = okHttpClient.newWebSocket(request, listener)
         this.socket = socket
-        return socket to listener
+        listener.onCreate(socket)
     }
 
 }
 
-class RxSocketListener : WebSocketListener() {
-
-    var stateEmitter: FlowableEmitter<SocketState>? = null
+class RxSocketListener(private val stateEmitter: FlowableEmitter<SocketState>) : WebSocketListener() {
 
     private val textMsgProcessor = PublishProcessor.create<String>()
     private val byteMsgProcessor = PublishProcessor.create<ByteString>()
@@ -56,13 +44,13 @@ class RxSocketListener : WebSocketListener() {
      * socket is open, hence we let users do it upon socket creation.
      */
     fun onCreate(socket: WebSocket) {
-        stateEmitter?.onNext(SocketState.Connecting(socket))
+        stateEmitter.onNext(SocketState.Connecting(socket))
     }
 
     override fun onOpen(webSocket: WebSocket, response: Response) {
         super.onOpen(webSocket, response)
         val connectedState = SocketState.Connected(webSocket, textMsgProcessor, byteMsgProcessor)
-        stateEmitter?.onNext(connectedState)
+        stateEmitter.onNext(connectedState)
     }
 
     override fun onMessage(webSocket: WebSocket, text: String) {
@@ -77,18 +65,18 @@ class RxSocketListener : WebSocketListener() {
 
     override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
         super.onFailure(webSocket, t, response)
-        stateEmitter?.tryOnError(SocketConnectionException(t, response))
+        stateEmitter.tryOnError(SocketConnectionException(t, response))
     }
 
     override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
         super.onClosing(webSocket, code, reason)
-        stateEmitter?.onNext(SocketState.Disconnecting)
+        stateEmitter.onNext(SocketState.Disconnecting)
     }
 
     override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
         super.onClosed(webSocket, code, reason)
-        stateEmitter?.onNext(SocketState.Disconnected)
-        stateEmitter?.onComplete()
+        stateEmitter.onNext(SocketState.Disconnected)
+        stateEmitter.onComplete()
     }
 
     class SocketConnectionException(val originalException: Throwable, val response: Response?) : SocketException()
