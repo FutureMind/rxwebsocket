@@ -10,7 +10,7 @@ import java.net.SocketException
 
 
 class RxWebSocket(
-    private val okHttpClient: OkHttpClient,
+    private val webSocketFactory: WebSocket.Factory,
     private val request: Request
 ) {
 
@@ -26,7 +26,7 @@ class RxWebSocket(
 
     private fun openSocketAndListen(emitter: FlowableEmitter<SocketState>) {
         val listener = RxSocketListener(emitter)
-        val socket = okHttpClient.newWebSocket(request, listener)
+        val socket = webSocketFactory.newWebSocket(request, listener)
         this.socket = socket
         listener.onCreate(socket)
     }
