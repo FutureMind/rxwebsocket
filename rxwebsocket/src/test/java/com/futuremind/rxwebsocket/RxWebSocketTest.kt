@@ -6,6 +6,7 @@ import io.reactivex.Flowable
 import okhttp3.*
 import okio.ByteString
 import okio.ByteString.Companion.encodeUtf8
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
@@ -120,7 +121,7 @@ class RxWebSocketTest {
     fun `given text messages sent to rxws, they are sent through the underlying socket`() {
         rxSocket.connect()
             .switchMapCompletable { state ->
-                if(state is SocketState.SendCapable){
+                if (state is SocketState.SendCapable) {
                     state.send("abc")
                     state.send("def")
                 }
@@ -136,7 +137,7 @@ class RxWebSocketTest {
     fun `given byte string messages sent to rxws, they are sent through the underlying socket`() {
         rxSocket.connect()
             .switchMapCompletable { state ->
-                if(state is SocketState.SendCapable){
+                if (state is SocketState.SendCapable) {
                     state.send("abc".encodeUtf8())
                     state.send("def".encodeUtf8())
                 }
@@ -154,7 +155,7 @@ class RxWebSocketTest {
         val testSubscriber = rxSocket.connect()
             .mockSuccessfulConnection()
             .switchMap { state ->
-                when(state){
+                when (state) {
                     is SocketState.Connected -> state.messageFlowable()
                     else -> Flowable.never()
                 }
@@ -174,7 +175,7 @@ class RxWebSocketTest {
         val testSubscriber = rxSocket.connect()
             .mockSuccessfulConnection()
             .switchMap { state ->
-                when(state){
+                when (state) {
                     is SocketState.Connected -> state.byteMessageFlowable()
                     else -> Flowable.never()
                 }
@@ -194,7 +195,7 @@ class RxWebSocketTest {
         val testSubscriber = rxSocket.connect()
             .mockSuccessfulConnection()
             .switchMap { state ->
-                when(state){
+                when (state) {
                     is SocketState.Connected -> state.messageFlowable()
                     else -> Flowable.never()
                 }
@@ -213,7 +214,7 @@ class RxWebSocketTest {
         val testSubscriber = rxSocket.connect()
             .mockSuccessfulConnection()
             .switchMap { state ->
-                when(state){
+                when (state) {
                     is SocketState.Connected -> state.byteMessageFlowable()
                     else -> Flowable.never()
                 }
@@ -224,6 +225,70 @@ class RxWebSocketTest {
 
         testSubscriber.assertNever("abc".encodeUtf8())
 
+    }
+
+    @Test
+    fun `given an rx retry function, the socket is recreated upon failure`() {
+
+        var attempt = 0
+
+        val disconnectedException = Exception("Can be retried")
+
+        var exceptionInsideStreamSlot : Throwable? = null
+
+        rxSocket.connect()
+            .doOnNext { state ->
+                if (state is SocketState.Connecting) {
+                    when(attempt){
+                        0 -> mockWebSocketListener.onFailure(mockWebSocket, disconnectedException, null)
+                        1 -> mockWebSocketListener.onOpen(mockWebSocket, prepareOkHttpResponse(200))
+                    }
+                    attempt++
+                }
+            }
+            .doOnError { exceptionInsideStreamSlot = it }
+            .retry { throwable: Throwable ->
+                throwable is RxSocketListener.SocketConnectionException
+                        && throwable.originalException == disconnectedException
+            }
+            .test()
+            .assertNoErrors()
+            .assertValueAt(0){ it is SocketState.Connecting }
+            .assertValueAt(1){ it is SocketState.Connecting }
+            .assertValueAt(2){ it is SocketState.Connected }
+
+        verify(exactly = 2) { okHttpClient.newWebSocket(request, any()) }
+
+        assertEquals(
+            disconnectedException,
+            (exceptionInsideStreamSlot as RxSocketListener.SocketConnectionException).originalException
+        )
+    }
+
+    @Test
+    fun `given an rx repeat function, the socket is recreated upon disconnection`() {
+
+        var completedCount = 0
+
+        rxSocket.connect()
+            .doOnNext { state ->
+                if (state is SocketState.Connecting) {
+                    mockWebSocketListener.onClosed(mockWebSocket, 1000, "")
+                }
+            }
+            .doOnNext { println(it) }
+            .doOnComplete { completedCount++ }
+            .repeat(2)
+            .test()
+            .assertValueAt(0){ it is SocketState.Connecting }
+            .assertValueAt(1){ it is SocketState.Disconnected }
+            .assertValueAt(2){ it is SocketState.Connecting }
+            .assertValueAt(3){ it is SocketState.Disconnected }
+            .assertComplete()
+
+        verify(exactly = 2) { okHttpClient.newWebSocket(request, any()) }
+
+        assertEquals(2, completedCount)
     }
 
     private fun prepareOkHttpResponse(code: Int) = Response.Builder()
