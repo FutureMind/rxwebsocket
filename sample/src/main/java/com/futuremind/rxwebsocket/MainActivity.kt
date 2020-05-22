@@ -12,6 +12,9 @@ import okhttp3.Request
 
 class MainActivity : AppCompatActivity() {
 
+    private lateinit var socketConnection : Flowable<SocketState>
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
