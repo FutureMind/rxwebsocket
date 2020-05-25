@@ -45,16 +45,15 @@ RxWebSocket(okHttpClient, request)
     .connect()
     .switchMap { state ->
         when(state) {
-            SocketState.Disconnecting -> TODO()
-            SocketState.Disconnected -> TODO()
             is SocketState.Connecting -> TODO()
             is SocketState.Connected -> TODO()
+            SocketState.Disconnecting -> TODO()
+            SocketState.Disconnected -> TODO()
         }
     }
-    .subscribe(
-        { TODO() },
-        { TODO() }
-    )
+    .doOnError { TODO("Handle socket connection failed") }
+    .doOnComplete { TODO("Handle socket connection closed gracefully") }
+    .subscribe()
 ```
 
 It's good to use `switchMap` here to make sure that when the state changes, you unsubscribe from e.g. `Connected.messageFlowable`.

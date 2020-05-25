@@ -17,7 +17,6 @@ class MainViewModel : ViewModel() {
 
     private val socketConnection: Flowable<SocketState> = rxSocket
         .connect()
-        .subscribeOn(Schedulers.io())
         .retryWhen { it.delay(3, TimeUnit.SECONDS) }
         .replay(1)
         .autoConnect()
@@ -40,7 +39,6 @@ class MainViewModel : ViewModel() {
     fun sendMessage(message: String) = outgoingMessagesProcessor.onNext(message)
 
     override fun onCleared() {
-        super.onCleared()
         rxSocket.disconnect(1000, "")
         outgoingMessagesDisposable.dispose()
     }
