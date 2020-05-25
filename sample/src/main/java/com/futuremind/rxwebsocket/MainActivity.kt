@@ -35,6 +35,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         messagesDisposable.dispose()
+        socketStateDisposable.dispose()
     }
 
 }
