@@ -11,9 +11,9 @@ Instead of implementing a `WebSocketListener` like you would normally do with `W
 
 Simply prepare you `OkhttpClient` and a regular `okhttp3.Request`.
 
-```
+```kotlin
 val okHttpClient = OkHttpClient.Builder().build()
-val request = Request.Builder().url("wss://echo.websocket.org").build()
+val request = Request.Builder().url(...).build()
 
 RxWebSocket(okHttpClient, request)
     .connect()
@@ -27,8 +27,8 @@ The `RxWebSocket.connect()` returns a `Flowable` with different socket states to
 
 | Rx event | State | Description |
 |-------------|---------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| onNext | Connecting | Returned immediately after subscribing.<br>You can start sending at this stage and the messages will be queued for when the socket connects.<br>Corresponds to the state before `onOpen` in `WebSocketListener`. |
-| onNext | Connected | Returned when the socket has successfully opened connection. <br>You can send messages while in this state.<br>You can subscribe to `messageFlowable` or `byteMessageFlowable` in this state.<br>Corresponds to `onOpen` in `WebSocketListener`. |
+| onNext | Connecting | Returned immediately after subscribing. <br>You can start sending at this stage and the messages will be queued for when the socket connects. <br>Corresponds to the state before `onOpen` in `WebSocketListener`. |
+| onNext | Connected | Returned when the socket has successfully opened connection. <br>You can send messages while in this state. <br>You can subscribe to `messageFlowable` or `byteMessageFlowable` in this state.<br>Corresponds to `onOpen` in `WebSocketListener`. |
 | onNext | Disconnecting | Corresponds to `onClosing` in `WebSocketListener`. |
 | onNext | Disconnected | Corresponds to `onClosed` in `WebSocketListener`. Right after this event, `onCompleted` is published. |
 | onCompleted | - | The Flowable is completed right after `Disconnected` (`onClosed`). |
@@ -39,7 +39,7 @@ The `RxWebSocket.connect()` returns a `Flowable` with different socket states to
 
 So the whole flow can look something like this.
 
-```
+```kotlin
 RxWebSocket(okHttpClient, request)
     .connect()
     .switchMap { state ->
@@ -62,7 +62,7 @@ It's good to use `switchMap` here to make sure that when the state changes, you 
 
 `Connecting` and `Connected` implement `SendCapable`. In both these states you can send messages, although in `Connecting` the messages will be queued and sent when it's possible (`okhttp` exposes such mechanism).
 
-```
+```kotlin
 RxWebSocket(okHttpClient, request)
     .connect()
     .ofType(SocketState.SendCapable::class.java)
@@ -74,7 +74,7 @@ RxWebSocket(okHttpClient, request)
 
 ### Receiving messages
 
-```
+```kotlin
 RxWebSocket(okHttpClient, request)
     .connect()
     .switchMap { state ->
@@ -86,6 +86,129 @@ RxWebSocket(okHttpClient, request)
     .subscribe { msg -> handleMessage(msg) }
 ```
 
-## Real life scenario
+### Dealing with disconnection
 
-TODO
+Because socket failures cause flowable error and graceful disconnections cause it to complete, you can leverage the power of RxJava's `retry` and `repeat` functions to implement your reconnection logic in a very elegant way.
+
+```kotlin
+RxWebSocket(okHttpClient, request)
+    .connect()
+    .retryWhen { it.delay(3, TimeUnit.SECONDS) }
+    .subscribe()
+```
+
+
+## Real life example
+
+In real life, you will probably have some `ViewModel` which observes incoming messages to pass them to UI and also accepts new messages e.g. incoming from some input field. Here's a sample implementation of such `ViewModel` (you can aso find it in `sample` directory).
+
+```kotlin
+class MainViewModel : ViewModel() {
+
+    private val okHttpClient = OkHttpClient.Builder().build()
+    private val request = Request.Builder().url("wss://echo.websocket.org").build()
+
+    private val rxSocket = RxWebSocket(okHttpClient, request)
+
+    private val socketConnection: Flowable<SocketState> = rxSocket
+        .connect()
+        .retryWhen { it.delay(3, TimeUnit.SECONDS) }
+        .replay(1)
+        .autoConnect()
+
+    private val outgoingMessagesProcessor = PublishProcessor.create<String>()
+
+    private val outgoingMessagesDisposable = socketConnection
+        .ofType(SocketState.SendCapable::class.java)
+        .switchMap { state ->
+            outgoingMessagesProcessor.doOnNext { state.send(it) }
+        }
+        .subscribe()
+
+    fun observeSocketState(): Flowable<SocketState> = socketConnection
+
+    fun observeMessages(): Flowable<String> = socketConnection
+        .ofType(SocketState.Connected::class.java)
+        .switchMap { it.messageFlowable() }
+
+    fun sendMessage(message: String) = outgoingMessagesProcessor.onNext(message)
+
+    override fun onCleared() {
+        super.onCleared()
+        rxSocket.disconnect(1000, "")
+        outgoingMessagesDisposable.dispose()
+    }
+
+}
+```
+
+
+Let's break it down piece by piece.
+
+
+First, we prepare our RxWebSocket for connection.
+
+```kotlin
+private val okHttpClient = OkHttpClient.Builder().build()
+private val request = Request.Builder().url("wss://echo.websocket.org").build()
+
+private val rxSocket = RxWebSocket(okHttpClient, request)
+```
+
+---
+
+Then we introduce our connection flowable.
+
+```kotlin
+private val socketConnection: Flowable<SocketState> = rxSocket
+        .connect()
+        .retryWhen { it.delay(3, TimeUnit.SECONDS) }
+        .replay(1)
+        .autoConnect()
+```
+
+`.replay(1).autoConnect()` is used to multicast our flowable so that our socket connetion can be easily used by different subscribers. `replay(1)` makes sure that whenever new subscriber arrives, he immediately receives the current state the socket is in.
+
+Notice the `retryWhen` - it is used to make sure, that whenever our connection breaks it is reconnected. Of course this is a very simple example, you can use a much more sophisticated reconnection logic in your `retry` operator.
+
+---
+
+```kotlin
+private val outgoingMessagesProcessor = PublishProcessor.create<String>()
+
+private val outgoingMessagesDisposable = socketConnection
+    .ofType(SocketState.SendCapable::class.java)
+    .switchMap { state ->
+        outgoingMessagesProcessor.doOnNext { state.send(it) }
+    }
+    .subscribe()
+```
+
+This code is responsible for processing incoming messages and sending them through the websocket.
+
+---
+
+This is the interface of our `ViewModel` which should be pretty self-explanatory.
+
+```kotlin
+fun observeSocketState(): Flowable<SocketState> = socketConnection
+
+fun observeMessages(): Flowable<String> = socketConnection
+    .ofType(SocketState.Connected::class.java)
+    .switchMap { it.messageFlowable() }
+
+fun sendMessage(message: String) = outgoingMessagesProcessor.onNext(message)
+```
+
+---
+
+Last but not least, remeber to disconnect from websocket when you're done with it. Calling `disconnect` gracefully closes the socket and completes our `socketConnection`.
+
+```kotlin
+    override fun onCleared() {
+        super.onCleared()
+        rxSocket.disconnect(1000, "")
+        outgoingMessagesDisposable.dispose()
+    }
+```
+
