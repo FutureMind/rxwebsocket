@@ -1,13 +1,12 @@
 package com.futuremind.rxwebsocket
 
 import androidx.lifecycle.ViewModel
-import io.reactivex.Completable
 import io.reactivex.Flowable
-import io.reactivex.disposables.Disposable
-import io.reactivex.processors.BehaviorProcessor
 import io.reactivex.processors.PublishProcessor
+import io.reactivex.schedulers.Schedulers
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.util.concurrent.TimeUnit
 
 class MainViewModel : ViewModel() {
 
@@ -18,6 +17,8 @@ class MainViewModel : ViewModel() {
 
     private val socketConnection: Flowable<SocketState> = rxSocket
         .connect()
+        .subscribeOn(Schedulers.io())
+        .retryWhen { it.delay(3, TimeUnit.SECONDS) }
         .replay(1)
         .autoConnect()
 
@@ -25,19 +26,23 @@ class MainViewModel : ViewModel() {
 
     private val outgoingMessagesDisposable = socketConnection
         .ofType(SocketState.SendCapable::class.java)
+        .switchMap { state ->
+            outgoingMessagesProcessor.doOnNext { state.send(it) }
+        }
         .subscribe()
 
-    fun sendMessage(message: String) {
+    fun observeSocketState(): Flowable<SocketState> = socketConnection
 
-    }
+    fun observeMessages(): Flowable<String> = socketConnection
+        .ofType(SocketState.Connected::class.java)
+        .switchMap { it.messageFlowable() }
 
-    fun observeMessages(): Flowable<String> {
-        TODO()
-    }
+    fun sendMessage(message: String) = outgoingMessagesProcessor.onNext(message)
 
     override fun onCleared() {
         super.onCleared()
         rxSocket.disconnect(1000, "")
+        outgoingMessagesDisposable.dispose()
     }
 
 }

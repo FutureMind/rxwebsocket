@@ -1,64 +1,40 @@
 package com.futuremind.rxwebsocket
 
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import android.util.Log
-import android.widget.Toast
-import io.reactivex.Flowable
+import androidx.activity.viewModels
+import androidx.appcompat.app.AppCompatActivity
 import io.reactivex.android.schedulers.AndroidSchedulers
-import io.reactivex.schedulers.Schedulers
-import okhttp3.OkHttpClient
-import okhttp3.Request
+import io.reactivex.disposables.Disposable
+import kotlinx.android.synthetic.main.activity_main.*
+
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var socketConnection : Flowable<SocketState>
-
+    private lateinit var messagesDisposable: Disposable
+    private lateinit var socketStateDisposable: Disposable
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val okHttpClient = OkHttpClient.Builder().build()
-        val request = Request.Builder().url("wss://echo.websocket.org").build()
+        val viewModel : MainViewModel by viewModels()
 
-        /*
-        The piece of code below does the following:
-        1. Initiates connection.
-        2. Notifies "Connecting" state.
-        3. Connects and notifies "Connected" state.
-        4. Sends "abc" message.
-        5. Starts listening to incoming messages.
-        6. Receives "abc" message from echo server.
-        7. Upon receiving first message, completes the observable, which triggers disconnection.
-         */
+        socketStateDisposable = viewModel.observeSocketState()
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe { socketStateTv.text = it::class.java.simpleName }
 
-        RxWebSocket(okHttpClient, request).connect()
-            .subscribeOn(Schedulers.io())
+        messagesDisposable = viewModel.observeMessages()
+            .scan("") { old: String, new: String -> "$new\n$old" }
             .observeOn(AndroidSchedulers.mainThread())
-            .doOnNext { showMessage(it::class.java.simpleName) }
-            .switchMap { state ->
-                if (state is SocketState.SendCapable) {
-                    state.send("abc")
-                }
-                when (state) {
-                    is SocketState.Connected -> state.messageFlowable()
-                    else -> Flowable.never()
-                }
-            }
-            .firstOrError() // just load one message and finish
-            .observeOn(AndroidSchedulers.mainThread())
-            .doAfterTerminate { showMessage("Disconnected and terminated") }
-            .subscribe(
-                { showMessage("Message received: $it") },
-                { showMessage(it.message ?: ""); it.printStackTrace() }
-            )
+            .subscribe { messagesTv.text = it }
+
+        sendBtn.setOnClickListener { viewModel.sendMessage(messageEt.text.toString()) }
 
     }
 
-    private fun showMessage(message: String) {
-        Log.v("Socket msg", message)
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    override fun onDestroy() {
+        super.onDestroy()
+        messagesDisposable.dispose()
     }
 
 }

@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">RxWebSocket</string>
+    <string name="message">Message</string>
+    <string name="send">Send</string>
 </resources>
