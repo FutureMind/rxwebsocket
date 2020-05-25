@@ -1,5 +1,6 @@
 # RxWebSocket
 
+[![](https://jitpack.io/v/FutureMind/rxwebsocket.svg)](https://jitpack.io/#FutureMind/rxwebsocket) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 RxWebSocket is a simple, lightweight, reactive wrapper around [OkHttp WebSocket](https://square.github.io/okhttp/4.x/okhttp/okhttp3/-web-socket/), inspired by [RxAndroidBle](https://github.com/Polidea/RxAndroidBle).
 
@@ -212,3 +213,41 @@ Last but not least, remeber to disconnect from websocket when you're done with i
     }
 ```
 
+## Installation
+
+RxWebSocket is available on jitpack.
+
+```gradle
+repositories {
+    ...
+    maven { url 'https://jitpack.io' }
+}
+```
+
+```gradle
+implementation 'com.github.FutureMind:rxwebsocket:1.0'
+```
+
+## License
+
+    The MIT License
+
+    Copyright (c) 2020 Future Mind
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE.
