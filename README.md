@@ -134,7 +134,6 @@ class MainViewModel : ViewModel() {
     fun sendMessage(message: String) = outgoingMessagesProcessor.onNext(message)
 
     override fun onCleared() {
-        super.onCleared()
         rxSocket.disconnect(1000, "")
         outgoingMessagesDisposable.dispose()
     }
@@ -206,7 +205,6 @@ Last but not least, remeber to disconnect from websocket when you're done with i
 
 ```kotlin
     override fun onCleared() {
-        super.onCleared()
         rxSocket.disconnect(1000, "")
         outgoingMessagesDisposable.dispose()
     }
