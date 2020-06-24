@@ -8,6 +8,8 @@ Instead of implementing a `WebSocketListener` like you would normally do with `W
 
 ## Usage
 
+TL;DR, take me to a [real life example](https://github.com/FutureMind/rxwebsocket#real-life-example).
+
 ### Connecting
 
 Simply prepare you `OkhttpClient` and a regular `okhttp3.Request`.
