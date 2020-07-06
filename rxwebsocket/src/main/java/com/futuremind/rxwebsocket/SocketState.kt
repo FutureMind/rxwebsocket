@@ -1,6 +1,6 @@
 package com.futuremind.rxwebsocket
 
-import io.reactivex.Flowable
+import io.reactivex.rxjava3.core.Flowable
 import okhttp3.WebSocket
 import okio.ByteString
 
@@ -30,6 +30,4 @@ sealed class SocketState {
         fun messageFlowable() = messageFlowable
         fun byteMessageFlowable() = byteMessageFlowable
     }
-
-
 }

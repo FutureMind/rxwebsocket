@@ -1,9 +1,10 @@
 package com.futuremind.rxwebsocket
 
 import androidx.lifecycle.ViewModel
-import io.reactivex.Flowable
-import io.reactivex.processors.PublishProcessor
-import io.reactivex.schedulers.Schedulers
+import io.reactivex.rxjava3.core.Flowable
+import io.reactivex.rxjava3.processors.PublishProcessor
+import io.reactivex.rxjava3.schedulers.Schedulers;
+
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
