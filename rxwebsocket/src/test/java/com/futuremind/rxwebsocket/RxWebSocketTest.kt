@@ -204,9 +204,7 @@ class RxWebSocketTest {
 
         mockWebSocketListener.onMessage(mockWebSocket, "abc".encodeUtf8())
 
-
-        //no longer supported in base package
-        // testSubscriber.assertNever("abc")
+        testSubscriber.assertEmpty()
 
     }
 
@@ -225,8 +223,7 @@ class RxWebSocketTest {
 
         mockWebSocketListener.onMessage(mockWebSocket, "abc")
 
-        //no longer supported in base package
-        //testSubscriber.assertNever("abc".encodeUtf8())
+        testSubscriber.assertEmpty()
 
     }
 
