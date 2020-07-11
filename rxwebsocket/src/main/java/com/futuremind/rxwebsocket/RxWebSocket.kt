@@ -1,9 +1,9 @@
 package com.futuremind.rxwebsocket
 
-import io.reactivex.BackpressureStrategy.LATEST
-import io.reactivex.Flowable
-import io.reactivex.FlowableEmitter
-import io.reactivex.processors.PublishProcessor
+import io.reactivex.rxjava3.core.BackpressureStrategy.LATEST
+import io.reactivex.rxjava3.core.Flowable
+import io.reactivex.rxjava3.core.FlowableEmitter
+import io.reactivex.rxjava3.processors.PublishProcessor
 import okhttp3.*
 import okio.ByteString
 import java.net.SocketException

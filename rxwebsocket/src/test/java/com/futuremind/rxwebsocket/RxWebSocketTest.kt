@@ -1,8 +1,8 @@
 package com.futuremind.rxwebsocket
 
 import io.mockk.*
-import io.reactivex.Completable
-import io.reactivex.Flowable
+import io.reactivex.rxjava3.core.Completable
+import io.reactivex.rxjava3.core.Flowable
 import okhttp3.*
 import okio.ByteString
 import okio.ByteString.Companion.encodeUtf8
@@ -204,7 +204,7 @@ class RxWebSocketTest {
 
         mockWebSocketListener.onMessage(mockWebSocket, "abc".encodeUtf8())
 
-        testSubscriber.assertNever("abc")
+        testSubscriber.assertEmpty()
 
     }
 
@@ -223,7 +223,7 @@ class RxWebSocketTest {
 
         mockWebSocketListener.onMessage(mockWebSocket, "abc")
 
-        testSubscriber.assertNever("abc".encodeUtf8())
+        testSubscriber.assertEmpty()
 
     }
 
